@@ -31,8 +31,8 @@ function TodoForm({ theme, onAdd }) {
 
   return (
     <form onSubmit={handleSubmit} className="mb-6">
-      <div className="flex gap-3 items-start">
-        <div className="flex-1 relative">
+      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-stretch">
+        <div className="w-full sm:flex-1 relative mb-4 sm:mb-0">
           <input
             type="text"
             value={text}
@@ -41,39 +41,42 @@ function TodoForm({ theme, onAdd }) {
               setError('')
             }}
             placeholder="What needs to be done?"
-            className={`w-full px-5 py-4 ${isLight ? 'bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:ring-primary-500' : 'bg-white/10 backdrop-blur-sm border border-white/20 text-white placeholder-white/50 focus:ring-white/40'} rounded-xl focus:outline-none focus:ring-2 focus:border-transparent transition-all duration-200`}
+            className={`w-full min-h-[56px] sm:h-full px-5 py-4 ${isLight ? 'bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:ring-primary-500' : 'bg-white/10 backdrop-blur-sm border border-white/20 text-white placeholder-white/50 focus:ring-white/40'} rounded-xl focus:outline-none focus:ring-2 focus:border-transparent transition-all duration-200`}
           />
           {error && (
-            <p className={`absolute -bottom-5 left-0 text-sm ${isLight ? 'text-red-600' : 'text-red-300'}`}>{error}</p>
+            <p className={`absolute -bottom-6 left-1 text-sm font-medium ${isLight ? 'text-red-500' : 'text-red-400'}`}>{error}</p>
           )}
         </div>
 
-        {/* Priority selector */}
-        <div className="flex gap-1">
-          {priorities.map(p => (
-            <button
-              key={p.value}
-              type="button"
-              onClick={() => setPriority(p.value)}
-              className={`p-3 rounded-lg border-2 transition-all ${
-                priority === p.value
-                  ? `${p.border} ${isLight ? 'bg-white' : 'bg-white/5'}`
-                  : `${isLight ? 'border-gray-300 bg-white' : 'border-white/20 bg-white/5'}`
-              }`}
-              title={p.label}
-            >
-              <div className={`w-3 h-3 rounded-full ${p.color}`} />
-            </button>
-          ))}
-        </div>
+        {/* Priority selector and Add button container */}
+        <div className="flex w-full sm:w-auto gap-3 h-[56px]">
+          {/* Priority selector */}
+          <div className="flex gap-2 flex-[1.2] sm:flex-none">
+            {priorities.map(p => (
+              <button
+                key={p.value}
+                type="button"
+                onClick={() => setPriority(p.value)}
+                className={`flex-1 sm:w-14 h-full flex items-center justify-center rounded-xl border-2 transition-all ${
+                  priority === p.value
+                    ? `${p.border} ${isLight ? 'bg-gray-50' : 'bg-white/10 shadow-sm'}`
+                    : `${isLight ? 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50' : 'border-white/20 bg-white/5 hover:bg-white/10'}`
+                }`}
+                title={p.label}
+              >
+                <div className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full ${p.color}`} />
+              </button>
+            ))}
+          </div>
 
-        <button
-          type="submit"
-          className="px-6 py-4 bg-white text-gray-900 rounded-xl font-medium hover:bg-white/90 transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl"
-        >
-          <Plus className="w-5 h-5" />
-          Add
-        </button>
+          <button
+            type="submit"
+            className="flex-1 sm:flex-none h-full px-6 bg-white text-gray-900 rounded-xl font-bold hover:bg-gray-100 transition-all duration-200 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl"
+          >
+            <Plus className="w-5 h-5 sm:w-6 sm:h-6" />
+            <span className="text-base sm:text-lg">Add</span>
+          </button>
+        </div>
       </div>
     </form>
   )

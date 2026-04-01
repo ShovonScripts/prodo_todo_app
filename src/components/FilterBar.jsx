@@ -1,6 +1,6 @@
 import { Search } from 'lucide-react'
 
-function FilterBar({ theme, filter, onFilterChange, searchValue, onSearchChange }) {
+function FilterBar({ theme, filter, onFilterChange, searchValue, onSearchChange, allTags = [], selectedTag, onSelectTag }) {
   const isLight = theme === 'light'
   const filters = [
     { key: 'all', label: 'All' },
@@ -44,6 +44,29 @@ function FilterBar({ theme, filter, onFilterChange, searchValue, onSearchChange 
           </button>
         ))}
       </div>
+
+      {allTags.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide items-center">
+          <span className={`text-xs font-semibold uppercase tracking-wider ${isLight ? 'text-gray-400' : 'text-white/40'} mr-1`}>Tags:</span>
+          {allTags.map(tag => (
+            <button
+              key={tag}
+              onClick={() => onSelectTag(selectedTag === tag ? null : tag)}
+              className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-all duration-200 ${
+                selectedTag === tag
+                  ? isLight
+                    ? 'bg-primary-500 text-white'
+                    : 'bg-primary-500 text-white'
+                  : isLight
+                    ? 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
+                    : 'bg-white/10 text-white/70 hover:bg-white/20 border border-white/10'
+              }`}
+            >
+              #{tag}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

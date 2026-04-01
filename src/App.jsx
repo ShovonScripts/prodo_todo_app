@@ -24,6 +24,7 @@ function App() {
     return saved || 'dark'
   })
   const [selectedTodoId, setSelectedTodoId] = useState(null)
+  const [selectedTag, setSelectedTag] = useState(null)
   const [completedExpanded, setCompletedExpanded] = useState(true)
   const [toasts, setToasts] = useState([])
   const [isLoading, setIsLoading] = useState(false)
@@ -42,12 +43,33 @@ function App() {
   // Computed values
   const filteredTodos = todos.filter(todo => {
     const matchesFilter = filter === 'active' ? !todo.completed : filter === 'completed' ? todo.completed : true
-    const matchesSearch = todo.text.toLowerCase().includes(searchQuery.toLowerCase())
-    return matchesFilter && matchesSearch
+    const searchLower = searchQuery.toLowerCase()
+    const matchesSearch = todo.text.toLowerCase().includes(searchLower) || (todo.tags && todo.tags.some(tag => tag.includes(searchLower)))
+    const matchesTag = selectedTag ? (todo.tags && todo.tags.includes(selectedTag)) : true
+    return matchesFilter && matchesSearch && matchesTag
   })
 
-  const activeTodos = filteredTodos.filter(t => !t.completed)
-  const completedTodos = filteredTodos.filter(t => t.completed)
+  const allTags = [...new Set(todos.flatMap(t => t.tags || []))].sort()
+
+  const extractTags = (text) => {
+    const tags = []
+    const cleanText = text.replace(/#(\w+)/g, (match, tag) => {
+      tags.push(tag.toLowerCase())
+      return ''
+    }).replace(/\s+/g, ' ').trim()
+    return { cleanText, tags: [...new Set(tags)] }
+  }
+
+  const sortTodos = (list) => {
+    return [...list].sort((a, b) => {
+      if (a.priority !== b.priority) return (b.priority || 2) - (a.priority || 2)
+      if (a.order_index !== b.order_index) return (a.order_index || 0) - (b.order_index || 0)
+      return new Date(b.created_at || 0) - new Date(a.created_at || 0)
+    })
+  }
+
+  const activeTodos = sortTodos(filteredTodos.filter(t => !t.completed))
+  const completedTodos = sortTodos(filteredTodos.filter(t => t.completed))
 
   // Theme persistence
   useEffect(() => {
@@ -74,14 +96,19 @@ function App() {
       const { data: { session } } = await supabase.auth.getSession()
       setUser(session?.user || null)
       setAuthLoading(false)
+      
+      if (session?.user) {
+        fetchTodos(session.user.id)
+        subscribeToRealtime(session.user.id)
+      }
     }
     initAuth()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user || null)
       if (session?.user) {
-        fetchTodos()
-        subscribeToRealtime()
+        fetchTodos(session.user.id)
+        subscribeToRealtime(session.user.id)
       } else {
         setTodos([])
         unsubscribeFromRealtime()
@@ -162,15 +189,17 @@ function App() {
     setToasts(prev => prev.filter(t => t.id !== id))
   }
 
-  const fetchTodos = async () => {
-    if (!user) return
+  const fetchTodos = async (uid) => {
+    const currentUserId = typeof uid === 'string' ? uid : user?.id
+    if (!currentUserId) return
     setIsLoading(true)
     setError(null)
     try {
       const { data, error } = await supabase
         .from('todos')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', currentUserId)
+        .order('priority', { ascending: false })
         .order('order_index', { ascending: true })
         .order('created_at', { ascending: false })
 
@@ -184,17 +213,18 @@ function App() {
     }
   }
 
-  const subscribeToRealtime = () => {
-    if (!user) return
+  const subscribeToRealtime = (uid) => {
+    const currentUserId = typeof uid === 'string' ? uid : user?.id
+    if (!currentUserId) return
     unsubscribeFromRealtime()
 
     subscriptionRef.current = supabase
-      .channel(`todos:${user.id}`)
+      .channel(`todos:${currentUserId}`)
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'todos',
-        filter: `user_id=eq.${user.id}`
+        filter: `user_id=eq.${currentUserId}`
       }, (payload) => {
         handleRealtimeChange(payload)
       })
@@ -274,6 +304,33 @@ function App() {
       })
   }
 
+  const editTodo = (id, newText, newDueDate = undefined) => {
+    const originalTodo = todos.find(t => t.id === id)
+    if (!originalTodo) return
+
+    const { cleanText, tags } = extractTags(newText)
+    const finalTags = tags.length > 0 ? tags : originalTodo.tags || []
+    const finalText = cleanText || newText // fallback to raw string if completely wiped by tags
+    
+    // Support partial updates for due_date (if undefined, keep original)
+    const finalDueDate = newDueDate !== undefined ? newDueDate : originalTodo.due_date
+
+    setTodos(prev => prev.map(t => t.id === id ? { ...t, text: finalText, tags: finalTags, due_date: finalDueDate } : t))
+
+    supabase
+      .from('todos')
+      .update({ text: finalText, tags: finalTags, due_date: finalDueDate, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .then(({ error }) => {
+        if (error) throw error
+        addToast('Task updated', 'success')
+      })
+      .catch((err) => {
+        setTodos(prev => prev.map(t => t.id === id ? { ...t, text: originalTodo.text, tags: originalTodo.tags } : t))
+        addToast('Failed to update task', 'error')
+      })
+  }
+
   const deleteTodo = (id) => {
     if (!confirm('Delete this task?')) return
 
@@ -319,32 +376,37 @@ function App() {
       })
   }
 
-  const handleReorder = async (reorderedActive) => {
+  const handleReorder = async (reorderedActive, activeId, overId) => {
     if (!user) return
 
-    // Update order_index for each reordered item
-    const updates = reorderedActive.map((todo, index) => ({
-      id: todo.id,
-      order_index: index + 1
-    }))
+    let targetPriority = null
+    if (activeId && overId) {
+      const overItem = activeTodos.find(t => t.id === overId)
+      if (overItem) targetPriority = overItem.priority || 2
+    }
 
     // Update local state optimistically
     setTodos(prev => {
       const newTodos = [...prev]
+      if (targetPriority !== null) {
+        const activeIdx = newTodos.findIndex(t => t.id === activeId)
+        if (activeIdx !== -1) newTodos[activeIdx] = { ...newTodos[activeIdx], priority: targetPriority }
+      }
       reorderedActive.forEach((reorderedTodo, newIdx) => {
         const idx = newTodos.findIndex(t => t.id === reorderedTodo.id)
-        if (idx !== -1) {
-          newTodos[idx] = { ...newTodos[idx], order_index: newIdx + 1 }
-        }
+        if (idx !== -1) newTodos[idx] = { ...newTodos[idx], order_index: newIdx + 1 }
       })
       return newTodos
     })
 
-    try {
-      const { error } = await supabase
-        .from('todos')
-        .upsert(updates)
+    const updates = reorderedActive.map((todo, index) => ({
+      id: todo.id,
+      order_index: index + 1,
+      ...(todo.id === activeId && targetPriority !== null ? { priority: targetPriority } : {})
+    }))
 
+    try {
+      const { error } = await supabase.from('todos').upsert(updates)
       if (error) throw error
       addToast('Order updated', 'info')
     } catch (err) {
@@ -352,24 +414,25 @@ function App() {
     }
   }
 
-  const addTodo = async (text, priority = 2) => {
+  const addTodo = async (text, priority = 2, dueDate = null) => {
     if (!user) {
       addToast('Please sign in to add tasks', 'error')
       setShowAuthModal(true)
       return
     }
 
-    // Calculate order_index (append to end of active tasks)
-    const activeOnly = todos.filter(t => !t.completed)
-    const maxOrder = activeOnly.length > 0 ? Math.max(...activeOnly.map(t => t.order_index || 0)) : 0
+    const { cleanText, tags } = extractTags(text)
+    const finalText = cleanText || text
 
     const newTodo = {
       user_id: user.id,
-      text,
+      text: finalText,
       completed: false,
       priority,
-      order_index: maxOrder + 1,
-      tags: []
+      order_index: 0,
+      tags: tags,
+      due_date: dueDate,
+      created_at: new Date().toISOString()
     }
 
     // Optimistic update
@@ -499,6 +562,9 @@ function App() {
                   onFilterChange={setFilter}
                   searchValue={searchQuery}
                   onSearchChange={setSearchQuery}
+                  allTags={allTags}
+                  selectedTag={selectedTag}
+                  onSelectTag={setSelectedTag}
                 />
 
                 {/* Loading state */}
@@ -536,6 +602,7 @@ function App() {
                           todos={activeTodos}
                           onToggle={toggleTodo}
                           onDelete={deleteTodo}
+                          onEdit={editTodo}
                           onReorder={handleReorder}
                           selectedTodoId={selectedTodoId}
                           onSelect={setSelectedTodoId}
@@ -561,6 +628,7 @@ function App() {
                               todos={completedTodos}
                               onToggle={toggleTodo}
                               onDelete={deleteTodo}
+                              onEdit={editTodo}
                               selectedTodoId={selectedTodoId}
                               onSelect={setSelectedTodoId}
                               enableDnd={false}

@@ -15,7 +15,7 @@ import {
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import TodoItem from './TodoItem'
 
-function TodoList({ theme, todos, onToggle, onDelete, onReorder, selectedTodoId, onSelect, enableDnd = true }) {
+function TodoList({ theme, todos, onToggle, onDelete, onEdit, onReorder, selectedTodoId, onSelect, enableDnd = true }) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -34,7 +34,7 @@ function TodoList({ theme, todos, onToggle, onDelete, onReorder, selectedTodoId,
       const oldIndex = todos.findIndex(todo => todo.id === active.id)
       const newIndex = todos.findIndex(todo => todo.id === over.id)
       if (onReorder) {
-        onReorder(arrayMove(todos, oldIndex, newIndex))
+        onReorder(arrayMove(todos, oldIndex, newIndex), active.id, over.id)
       }
     }
   }
@@ -57,6 +57,7 @@ function TodoList({ theme, todos, onToggle, onDelete, onReorder, selectedTodoId,
               onSelect={onSelect}
               onToggle={onToggle}
               onDelete={onDelete}
+              onEdit={onEdit}
               isSortable={enableDnd}
             />
           ))}

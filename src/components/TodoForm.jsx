@@ -5,6 +5,7 @@ function TodoForm({ theme, onAdd }) {
   const [text, setText] = useState('')
   const [error, setError] = useState('')
   const [priority, setPriority] = useState(2) // 1=Low, 2=Medium, 3=High
+  const [dueDate, setDueDate] = useState('')
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -15,10 +16,11 @@ function TodoForm({ theme, onAdd }) {
       return
     }
 
-    onAdd(trimmed, priority)
+    onAdd(trimmed, priority, dueDate || null)
     setText('')
     setError('')
     setPriority(2) // reset to default
+    setDueDate('')
   }
 
   const isLight = theme === 'light'
@@ -40,7 +42,7 @@ function TodoForm({ theme, onAdd }) {
               setText(e.target.value)
               setError('')
             }}
-            placeholder="What needs to be done?"
+            placeholder="What needs to be done? Use #tags!"
             className={`w-full min-h-[56px] sm:h-full px-5 py-4 ${isLight ? 'bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:ring-primary-500' : 'bg-white/10 backdrop-blur-sm border border-white/20 text-white placeholder-white/50 focus:ring-white/40'} rounded-xl focus:outline-none focus:ring-2 focus:border-transparent transition-all duration-200`}
           />
           {error && (
@@ -48,10 +50,24 @@ function TodoForm({ theme, onAdd }) {
           )}
         </div>
 
-        {/* Priority selector and Add button container */}
+        {/* Actions container */}
         <div className="flex w-full sm:w-auto gap-3 h-[56px]">
+          {/* Due Date selector */}
+          <input
+            type="date"
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
+            style={{ colorScheme: isLight ? 'light' : 'dark' }}
+            className={`w-[130px] sm:w-min px-3 h-full flex items-center justify-center rounded-xl border-2 transition-all text-sm focus:outline-none focus:ring-2 focus:border-transparent ${
+              isLight 
+                ? 'border-gray-200 bg-white hover:border-gray-300 focus:ring-primary-500 text-gray-700' 
+                : 'border-white/20 bg-white/5 hover:bg-white/10 focus:ring-white/40 text-white'
+            }`}
+            title="Set due date"
+          />
+
           {/* Priority selector */}
-          <div className="flex gap-2 flex-[1.2] sm:flex-none">
+          <div className="flex gap-1 sm:gap-2 flex-[1.2] sm:flex-none">
             {priorities.map(p => (
               <button
                 key={p.value}
